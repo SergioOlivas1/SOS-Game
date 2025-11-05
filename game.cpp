@@ -22,8 +22,29 @@ bool Game::makeMove(int row, int col) {
         return false;
     }
 
-    switchPlayer();
+    // Check for SOS formations
+    int sosCount = board.checkForSOS(row, col);
 
+    if (sosCount > 0) {
+        currentPlayer->addScore(sosCount);
+
+        if (mode == GameMode::SIMPLE) {
+            // In simple mode, first SOS wins immediately
+            if (currentPlayer == player1.get()) {
+                state = GameState::PLAYER1_WIN;
+            } else {
+                state = GameState::PLAYER2_WIN;
+            }
+            return true;
+        }
+        // In general mode, player gets another turn when they score
+    } else {
+        // No SOS made, switch players
+        switchPlayer();
+    }
+
+    // Check if game should end
+    checkGameEnd();
     return true;
 }
 
@@ -36,7 +57,25 @@ void Game::switchPlayer() {
 }
 
 void Game::checkGameEnd() {
-    // TODO
+    if (board.isFull()) {
+        if (mode == GameMode::GENERAL) {
+            int p1Score = player1->getScore();
+            int p2Score = player2->getScore();
+
+            if (p1Score > p2Score) {
+                state = GameState::PLAYER1_WIN;
+            } else if (p2Score > p1Score) {
+                state = GameState::PLAYER2_WIN;
+            } else {
+                state = GameState::DRAW;
+            }
+        } else {
+            // Simple mode: if board is full and no one won yet, it's a draw
+            if (state == GameState::ONGOING) {
+                state = GameState::DRAW;
+            }
+        }
+    }
 }
 
 Board& Game::getBoard() {
