@@ -23,6 +23,8 @@ public:
                       const std::string& p2Name, PlayerType p2Type);
 
     bool makeMove(int row, int col);
+    bool makeComputerMove();
+    bool makeComputerMove(int& outRow, int& outCol);
     void switchPlayer();
     void checkGameEnd();
 

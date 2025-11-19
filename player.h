@@ -22,6 +22,9 @@ public:
     void setCurrentLetter(char letter);
     void addScore(int points);
     void resetScore();
+
+    //computer functionality
+    char chooseRandomLetter();
 };
 
 #endif

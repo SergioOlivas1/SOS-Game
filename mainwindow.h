@@ -9,6 +9,8 @@
 #include <QSpinBox>
 #include <QWidget>
 #include <QPainter>
+#include <QTimer>
+#include <QButtonGroup>
 #include <vector>
 #include "game.h"
 
@@ -50,14 +52,30 @@ private:
     QRadioButton* generalButton;
     QPushButton* newGameButton;
 
+    // Button groups
+    QButtonGroup* gameModeGroup;
+    QButtonGroup* letterGroup;
+    QButtonGroup* player1TypeGroup;
+    QButtonGroup* player2TypeGroup;
+
+    // Player type selection
+    QRadioButton* player1HumanButton;
+    QRadioButton* player1ComputerButton;
+    QRadioButton* player2HumanButton;
+    QRadioButton* player2ComputerButton;
+
+    QTimer* computerMoveTimer;
+
     void createBoard();
     void updateBoard();
     void checkAndDrawSOS(int row, int col, Player* scorer);
     bool checkSOSLine(int r1, int c1, int r2, int c2, int r3, int c3);
+    void handleComputerTurn();
 
 private slots:
     void cellClicked();
     void startNewGame();
+    void makeComputerMove();
 
 public:
     MainWindow(QWidget *parent = nullptr);

@@ -1,7 +1,16 @@
 #include "player.h"
+#include <cstdlib>
+#include <ctime>
 
 Player::Player(const std::string& playerName, PlayerType playerType)
-    : name(playerName), type(playerType), score(0), currentLetter('S') {}
+    : name(playerName), type(playerType), score(0), currentLetter('S') {
+    // seed random number generator
+    static bool seeded = false;
+    if (!seeded) {
+        srand(static_cast<unsigned int> (time(nullptr)));
+        seeded = true;
+    }
+}
 
 std::string Player::getName() const {
     return name;
@@ -29,4 +38,8 @@ void Player::addScore(int points) {
 
 void Player::resetScore() {
     score = 0;
+}
+
+char Player::chooseRandomLetter(){
+    return (rand() % 2 == 0) ? 'S' : 'O';
 }

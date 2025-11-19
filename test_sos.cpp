@@ -155,3 +155,93 @@ TEST_CASE("General game - Player 1 (Red) wins with most SOS", "[general][sprint3
     REQUIRE(game.getState() == GameState::PLAYER1_WIN);
     REQUIRE(game.getPlayer1()->getScore() >= 1);
 }
+
+
+// Computer tests
+
+TEST_CASE("Computer player type is set correctly", "[computer][sprint4]") {
+    Game game(5, GameMode::SIMPLE);
+
+    SECTION("Set both players as AI") {
+        game.setupPlayers("AI 1", PlayerType::AI, "AI 2", PlayerType::AI);
+        REQUIRE(game.getPlayer1()->getType() == PlayerType::AI);
+        REQUIRE(game.getPlayer2()->getType() == PlayerType::AI);
+    }
+
+    SECTION("Set mixed player types") {
+        game.setupPlayers("Human", PlayerType::HUMAN, "AI", PlayerType::AI);
+        REQUIRE(game.getPlayer1()->getType() == PlayerType::HUMAN);
+        REQUIRE(game.getPlayer2()->getType() == PlayerType::AI);
+    }
+}
+
+TEST_CASE("Computer makes valid moves", "[computer][sprint4]") {
+    Game game(5, GameMode::SIMPLE);
+    game.setupPlayers("AI", PlayerType::AI, "Human", PlayerType::HUMAN);
+
+    SECTION("Computer move is on empty cell") {
+        int row, col;
+        REQUIRE(game.makeComputerMove(row, col) == true);
+
+        // Verify move was made
+        REQUIRE(game.getBoard().getCell(row, col) != CellState::EMPTY);
+    }
+
+    SECTION("Computer move is within bounds") {
+        int row, col;
+        game.makeComputerMove(row, col);
+
+        REQUIRE(row >= 0);
+        REQUIRE(row < game.getBoard().getSize());
+        REQUIRE(col >= 0);
+        REQUIRE(col < game.getBoard().getSize());
+    }
+
+    SECTION("Computer cannot move on full board") {
+        // Fill the board
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
+                game.getBoard().makeMove(i, j, 'S');
+            }
+        }
+
+        int row, col;
+        REQUIRE(game.makeComputerMove(row, col) == false);
+    }
+}
+
+TEST_CASE("Computer makes multiple valid moves", "[computer][sprint4]") {
+    Game game(5, GameMode::GENERAL);
+    game.setupPlayers("AI 1", PlayerType::AI, "AI 2", PlayerType::AI);
+
+    SECTION("Computer can make 5 consecutive moves") {
+        int moveCount = 0;
+        for (int i = 0; i < 5; i++) {
+            int row, col;
+            if (game.makeComputerMove(row, col)) {
+                moveCount++;
+            }
+        }
+
+        REQUIRE(moveCount == 5);
+    }
+}
+
+TEST_CASE("Computer vs Computer game completes", "[computer][sprint4]") {
+    Game game(3, GameMode::SIMPLE);
+    game.setupPlayers("AI 1", PlayerType::AI, "AI 2", PlayerType::AI);
+
+    // Play until game ends
+    int maxMoves = 100;  // Safety limit
+    int moves = 0;
+
+    while (game.getState() == GameState::ONGOING && moves < maxMoves) {
+        int row, col;
+        game.makeComputerMove(row, col);
+        moves++;
+    }
+
+    // Game should have ended
+    REQUIRE(game.getState() != GameState::ONGOING);
+    REQUIRE(moves < maxMoves);  // Shouldn't hit safety limit
+}

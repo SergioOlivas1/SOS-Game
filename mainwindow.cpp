@@ -56,6 +56,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Create the game
     game = new Game(8, GameMode::SIMPLE);
+    computerMoveTimer = new QTimer(this);
+    connect(computerMoveTimer, &QTimer::timeout, this, &MainWindow::makeComputerMove);
 
     QWidget* mainWidget = new QWidget(this);
     QVBoxLayout* mainLayout = new QVBoxLayout(mainWidget);
@@ -75,6 +77,11 @@ MainWindow::MainWindow(QWidget *parent)
     simpleButton = new QRadioButton("Simple");
     generalButton = new QRadioButton("General");
     simpleButton->setChecked(true);
+
+    gameModeGroup = new QButtonGroup(this);
+    gameModeGroup->addButton(simpleButton);
+    gameModeGroup->addButton(generalButton);
+
     setupRow->addWidget(modeLabel);
     setupRow->addWidget(simpleButton);
     setupRow->addWidget(generalButton);
@@ -84,6 +91,42 @@ MainWindow::MainWindow(QWidget *parent)
     setupRow->addWidget(newGameButton);
 
     mainLayout->addLayout(setupRow);
+
+    // Player selection type
+    QHBoxLayout* playerTypeRow = new QHBoxLayout();
+
+    // Player 1
+    QLabel* p1Label = new QLabel("Player 1 (Blue):");
+    player1HumanButton = new QRadioButton("Human");
+    player1ComputerButton = new QRadioButton("Computer");
+    player1HumanButton->setChecked(true);
+
+    player1TypeGroup = new QButtonGroup(this);
+    player1TypeGroup->addButton(player1HumanButton);
+    player1TypeGroup->addButton(player1ComputerButton);
+
+    playerTypeRow->addWidget(p1Label);
+    playerTypeRow->addWidget(player1HumanButton);
+    playerTypeRow->addWidget(player1ComputerButton);
+
+    playerTypeRow->addSpacing(20);
+
+    //Player 2
+    QLabel* p2Label = new QLabel("Player 2 (Red):");
+    player2HumanButton = new QRadioButton("Human");
+    player2ComputerButton = new QRadioButton("Computer");
+    player2HumanButton->setChecked(true);
+
+    player2TypeGroup = new QButtonGroup(this);
+    player2TypeGroup->addButton(player2HumanButton);
+    player2TypeGroup->addButton(player2ComputerButton);
+
+    playerTypeRow->addWidget(p2Label);
+    playerTypeRow->addWidget(player2HumanButton);
+    playerTypeRow->addWidget(player2ComputerButton);
+
+    playerTypeRow->addStretch();
+    mainLayout->addLayout(playerTypeRow);
 
     // Turn info
     turnLabel = new QLabel("Player 1 (Blue)'s turn");
@@ -114,11 +157,12 @@ MainWindow::MainWindow(QWidget *parent)
     createBoard();
 
     setWindowTitle("SOS Game");
-    resize(600, 700);
+    resize(600, 750);
 }
 
 MainWindow::~MainWindow() {
     delete game;
+    delete computerMoveTimer;
 }
 
 void MainWindow::createBoard() {
@@ -278,6 +322,12 @@ void MainWindow::cellClicked() {
     QPushButton* button = qobject_cast<QPushButton*>(sender());
     if (!button) return;
 
+    // Only allow human players to click
+    Player* current = game->getCurrentPlayer();
+    if (current->getType() == PlayerType::AI){
+        return; // Ignore clicks during computer turn
+    }
+
     // Get row and col from button
     int row = button->property("row").toInt();
     int col = button->property("col").toInt();
@@ -292,7 +342,11 @@ void MainWindow::cellClicked() {
     if (game->makeMove(row, col)) {
         checkAndDrawSOS(row, col, movingPlayer);
         updateBoard();
+
+        //After human move, check if next player is computer
+        handleComputerTurn();
     }
+
 }
 
 void MainWindow::startNewGame() {
@@ -307,12 +361,61 @@ void MainWindow::startNewGame() {
 
     GameMode mode = simpleButton->isChecked() ? GameMode::SIMPLE : GameMode::GENERAL;
 
+    //Set players based on button selections
+    PlayerType p1Type = player1HumanButton->isChecked() ? PlayerType::HUMAN : PlayerType::AI;
+    PlayerType p2Type = player2HumanButton->isChecked() ? PlayerType::HUMAN : PlayerType::AI;
+
     // Start new game
     game->newGame(size, mode);
+    game->setupPlayers("Player 1", p1Type, "Player 2", p2Type);
 
     sButton->setChecked(true);
     oButton->setChecked(false);
 
     createBoard();
     updateBoard();
+
+    // If player 1 is computer, statrt computer move
+    handleComputerTurn();
 }
+
+void MainWindow::handleComputerTurn(){
+    if (game->getState() != GameState::ONGOING) {
+        return;
+    }
+
+    Player* current = game->getCurrentPlayer();
+    if (current && current->getType() == PlayerType::AI) {
+        // Disable board for computer turn
+        for (int i = 0; i < boardButtons.size(); i++) {
+            for (int j = 0; j < boardButtons[i].size(); j++) {
+                boardButtons[i][j]->setEnabled(false);
+            }
+        }
+
+        // Start timer for computer move (1 second delay)
+        computerMoveTimer->start(1000);
+    } else {
+        // Human turn, enable board
+        updateBoard();
+    }
+}
+
+void MainWindow::makeComputerMove(){
+    computerMoveTimer->stop();
+
+    if (game->getState() != GameState::ONGOING){
+        return;
+    }
+
+    Player* movingPlayer = game->getCurrentPlayer();
+    int row, col;
+
+    if (game->makeComputerMove(row, col)){
+        checkAndDrawSOS(row, col, movingPlayer);
+        updateBoard();
+
+        handleComputerTurn();
+    }
+}
+

@@ -48,6 +48,43 @@ bool Game::makeMove(int row, int col) {
     return true;
 }
 
+bool Game::makeComputerMove(){
+    int row, col;
+    return makeComputerMove(row, col);
+}
+
+bool Game::makeComputerMove(int& outRow, int& outCol){
+    if(state != GameState::ONGOING){
+        return false;
+    }
+
+    // Get all empty cells
+    std::vector<std::pair<int, int>> emptyCells;
+    for (int i = 0; i < board.getSize(); i++) {
+        for (int j = 0; j < board.getSize(); j++) {
+            if (board.isEmpty(i, j)) {
+                emptyCells.push_back(std::make_pair(i, j));
+            }
+        }
+    }
+
+    if (emptyCells.empty()) {
+        return false;
+    }
+
+    // Choose random empty cell
+    int randomIndex = rand() % emptyCells.size();
+    outRow = emptyCells[randomIndex].first;
+    outCol = emptyCells[randomIndex].second;
+
+    // Choose random letter
+    char letter = currentPlayer->chooseRandomLetter();
+    currentPlayer->setCurrentLetter(letter);
+
+    // Make the move
+    return makeMove(outRow, outCol);
+}
+
 void Game::switchPlayer() {
     if (currentPlayer == player1.get()) {
         currentPlayer = player2.get();
