@@ -1,7 +1,9 @@
 #include "game.h"
+#include <cstdlib>
 
 Game::Game(int size, GameMode gameMode)
-    : board(size), mode(gameMode), state(GameState::ONGOING), boardSize(size) {
+    : board(size), mode(gameMode), state(GameState::ONGOING), boardSize(size),
+      recording(false), moveCounter(0) {
 
     player1 = std::make_unique<Player>("Player 1", PlayerType::HUMAN);
     player2 = std::make_unique<Player>("Player 2", PlayerType::HUMAN);
@@ -20,6 +22,17 @@ bool Game::makeMove(int row, int col) {
 
     if (!board.makeMove(row, col, letter)) {
         return false;
+    }
+
+    if (recording) {
+        moveCounter++;
+        MoveRecord record;
+        record.moveNumber = moveCounter;
+        record.playerName = currentPlayer->getName();
+        record.row = row;
+        record.col = col;
+        record.letter = letter;
+        recordedMoves.push_back(record);
     }
 
     // Check for SOS formations
@@ -164,4 +177,30 @@ void Game::newGame(int size, GameMode gameMode) {
     player2->resetScore();
     currentPlayer = player1.get();
     state = GameState::ONGOING;
+
+    recording = false;
+    recordedMoves.clear();
+    moveCounter = 0;
+}
+
+void Game::startRecording() {
+    recording = true;
+    recordedMoves.clear();
+    moveCounter = 0;
+}
+
+void Game::stopRecording() {
+    recording = false;
+}
+
+bool Game::isRecording() const {
+    return recording;
+}
+
+std::vector<Game::MoveRecord> Game::getRecordedMoves() const {
+    return recordedMoves;
+}
+
+int Game::getBoardSize() const {
+    return boardSize;
 }

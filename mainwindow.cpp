@@ -52,12 +52,14 @@ void BoardWidget::paintEvent(QPaintEvent* event) {
 }
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent) {
+    : QMainWindow(parent), inReplayMode(false), replayIndex(0){
 
     // Create the game
     game = new Game(8, GameMode::SIMPLE);
     computerMoveTimer = new QTimer(this);
+    replayTimer = new QTimer(this);
     connect(computerMoveTimer, &QTimer::timeout, this, &MainWindow::makeComputerMove);
+    connect(replayTimer, &QTimer::timeout, this, &MainWindow::playNextReplayMove);
 
     QWidget* mainWidget = new QWidget(this);
     QVBoxLayout* mainLayout = new QVBoxLayout(mainWidget);
@@ -91,6 +93,20 @@ MainWindow::MainWindow(QWidget *parent)
     setupRow->addWidget(newGameButton);
 
     mainLayout->addLayout(setupRow);
+
+    //recording controls
+    QHBoxLayout* recordingRow = new QHBoxLayout();
+
+    recordButton = new QPushButton("Start Recording");
+    connect(recordButton, &QPushButton::clicked, this, &MainWindow::toggleRecording);
+    recordingRow->addWidget(recordButton);
+
+    loadRecordingButton = new QPushButton("Load Recording");
+    connect(loadRecordingButton, &QPushButton::clicked, this, &MainWindow::loadRecording);
+    recordingRow->addWidget(loadRecordingButton);
+
+    recordingRow->addStretch();
+    mainLayout->addLayout(recordingRow);
 
     // Player selection type
     QHBoxLayout* playerTypeRow = new QHBoxLayout();
@@ -157,12 +173,13 @@ MainWindow::MainWindow(QWidget *parent)
     createBoard();
 
     setWindowTitle("SOS Game");
-    resize(600, 750);
+    resize(600, 800);
 }
 
 MainWindow::~MainWindow() {
     delete game;
     delete computerMoveTimer;
+    delete replayTimer;
 }
 
 void MainWindow::createBoard() {
@@ -359,6 +376,11 @@ void MainWindow::startNewGame() {
         return;
     }
 
+    if (inReplayMode) {
+        inReplayMode = false;
+        replayTimer->stop();
+    }
+
     GameMode mode = simpleButton->isChecked() ? GameMode::SIMPLE : GameMode::GENERAL;
 
     //Set players based on button selections
@@ -368,6 +390,9 @@ void MainWindow::startNewGame() {
     // Start new game
     game->newGame(size, mode);
     game->setupPlayers("Player 1", p1Type, "Player 2", p2Type);
+
+    recordButton->setText("Start Recording");
+    recordButton->setEnabled(true);
 
     sButton->setChecked(true);
     oButton->setChecked(false);
@@ -419,3 +444,195 @@ void MainWindow::makeComputerMove(){
     }
 }
 
+void MainWindow::toggleRecording() {
+    if (inReplayMode) {
+        QMessageBox::warning(this, "Replay Mode", "Cannot record during replay!");
+        return;
+    }
+
+    if (game->isRecording()) {
+        // Stop recording and save
+        game->stopRecording();
+        recordButton->setText("Start Recording");
+        saveRecordingToFile();
+    } else {
+        // Start recording
+        game->startRecording();
+        recordButton->setText("Stop Recording");
+    }
+}
+
+void MainWindow::saveRecordingToFile() {
+    std::vector<Game::MoveRecord> moves = game->getRecordedMoves();
+
+    if (moves.empty()) {
+        QMessageBox::information(this, "No Moves", "No moves to save!");
+        return;
+    }
+
+    // Generate default filename with timestamp
+    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss");
+    QString defaultName = "SOS_Game_" + timestamp + ".txt";
+
+    QString filename = QFileDialog::getSaveFileName(this, "Save Recording",
+                                                    defaultName, "Text Files (*.txt)");
+
+    if (filename.isEmpty()) {
+        return;
+    }
+
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not save file!");
+        return;
+    }
+
+    QTextStream out(&file);
+
+    // Write metadata
+    out << "# SOS Game Recording\n";
+    out << "# Date: " << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss") << "\n";
+    out << "# Board Size: " << game->getBoardSize() << "\n";
+    out << "# Game Mode: " << (game->getMode() == GameMode::SIMPLE ? "Simple" : "General") << "\n";
+    out << "# Player 1: " << QString::fromStdString(game->getPlayer1()->getName())
+        << " (" << (game->getPlayer1()->getType() == PlayerType::HUMAN ? "Human" : "Computer") << ")\n";
+    out << "# Player 2: " << QString::fromStdString(game->getPlayer2()->getName())
+        << " (" << (game->getPlayer2()->getType() == PlayerType::HUMAN ? "Human" : "Computer") << ")\n";
+    out << "#\n";
+
+    // Write moves
+    for (const auto& move : moves) {
+        out << "MOVE:" << move.moveNumber << ":"
+            << QString::fromStdString(move.playerName) << ":"
+            << move.row << ":" << move.col << ":" << move.letter << "\n";
+    }
+
+    // Write result
+    GameState state = game->getState();
+    if (state == GameState::PLAYER1_WIN) {
+        out << "RESULT:Player 1 Wins\n";
+    } else if (state == GameState::PLAYER2_WIN) {
+        out << "RESULT:Player 2 Wins\n";
+    } else if (state == GameState::DRAW) {
+        out << "RESULT:Draw\n";
+    }
+
+    out << "FINAL_SCORE:" << game->getPlayer1()->getScore() << ":"
+        << game->getPlayer2()->getScore() << "\n";
+
+    file.close();
+
+    QMessageBox::information(this, "Success", "Recording saved successfully!");
+}
+
+void MainWindow::loadRecording() {
+    QString filename = QFileDialog::getOpenFileName(this, "Load Recording",
+                                                    "", "Text Files (*.txt)");
+
+    if (filename.isEmpty()) {
+        return;
+    }
+
+    QFile file(filename);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not open file!");
+        return;
+    }
+
+    QTextStream in(&file);
+
+    // Parse file
+    int boardSize = 8;
+    GameMode mode = GameMode::SIMPLE;
+    replayMoves.clear();
+    replayMetadata = "";
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+
+        if (line.startsWith("#")) {
+            // Metadata
+            replayMetadata += line + "\n";
+
+            if (line.contains("Board Size:")) {
+                boardSize = line.split(":").last().trimmed().toInt();
+            } else if (line.contains("Game Mode:")) {
+                mode = line.contains("Simple") ? GameMode::SIMPLE : GameMode::GENERAL;
+            }
+        } else if (line.startsWith("MOVE:")) {
+            // Parse move: MOVE:1:Player 1:0:0:S
+            QStringList parts = line.split(":");
+            if (parts.size() == 6) {
+                Game::MoveRecord move;
+                move.moveNumber = parts[1].toInt();
+                move.playerName = parts[2].toStdString();
+                move.row = parts[3].toInt();
+                move.col = parts[4].toInt();
+                move.letter = parts[5].at(0).toLatin1();
+                replayMoves.push_back(move);
+            }
+        }
+    }
+
+    file.close();
+
+    if (replayMoves.empty()) {
+        QMessageBox::warning(this, "Invalid File", "No valid moves found in file!");
+        return;
+    }
+
+    // Start replay
+    inReplayMode = true;
+    replayIndex = 0;
+
+    // Setup game for replay
+    game->newGame(boardSize, mode);
+    game->setupPlayers("Player 1", PlayerType::HUMAN, "Player 2", PlayerType::HUMAN);
+
+    createBoard();
+    updateBoard();
+
+    // Disable controls during replay
+    recordButton->setEnabled(false);
+    newGameButton->setEnabled(false);
+
+    turnLabel->setText("Replaying game... Move 0 of " + QString::number(replayMoves.size()));
+
+    // Start replay timer
+    replayTimer->start(1000);  // 1 second delay between moves
+}
+
+void MainWindow::playNextReplayMove() {
+    if (replayIndex >= replayMoves.size()) {
+        // Replay finished
+        replayTimer->stop();
+        turnLabel->setText("Replay complete!");
+        recordButton->setEnabled(true);
+        newGameButton->setEnabled(true);
+        QMessageBox::information(this, "Replay Complete", "Game replay finished!");
+        return;
+    }
+
+    const Game::MoveRecord& move = replayMoves[replayIndex];
+
+    // Set the appropriate player and letter
+    Player* player = (move.playerName == "Player 1") ? game->getPlayer1() : game->getPlayer2();
+    player->setCurrentLetter(move.letter);
+
+    // Make sure it's the right player's turn
+    while (game->getCurrentPlayer() != player) {
+        game->switchPlayer();
+    }
+
+    Player* movingPlayer = game->getCurrentPlayer();
+
+    // Make the move
+    if (game->makeMove(move.row, move.col)) {
+        checkAndDrawSOS(move.row, move.col, movingPlayer);
+        updateBoard();
+    }
+
+    replayIndex++;
+    turnLabel->setText("Replaying game... Move " + QString::number(replayIndex) +
+                       " of " + QString::number(replayMoves.size()));
+}

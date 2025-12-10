@@ -9,9 +9,15 @@
 #include <QSpinBox>
 #include <QWidget>
 #include <QPainter>
+#include <QColor>
 #include <QTimer>
 #include <QButtonGroup>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QDateTime>
+#include <QTextStream>
 #include <vector>
+#include <tuple>
 #include "game.h"
 
 // Custom widget to draw the board with SOS lines
@@ -51,6 +57,8 @@ private:
     QRadioButton* simpleButton;
     QRadioButton* generalButton;
     QPushButton* newGameButton;
+    QPushButton* recordButton;
+    QPushButton* loadRecordingButton;
 
     // Button groups
     QButtonGroup* gameModeGroup;
@@ -65,17 +73,28 @@ private:
     QRadioButton* player2ComputerButton;
 
     QTimer* computerMoveTimer;
+    QTimer* replayTimer;
+
+    bool inReplayMode;
+    std::vector<Game::MoveRecord> replayMoves;
+    int replayIndex;
+    QString replayMetadata;
 
     void createBoard();
     void updateBoard();
     void checkAndDrawSOS(int row, int col, Player* scorer);
     bool checkSOSLine(int r1, int c1, int r2, int c2, int r3, int c3);
     void handleComputerTurn();
+    void saveRecordingToFile();
+    void loadRecordingFromFile();
+    void playNextReplayMove();
 
 private slots:
     void cellClicked();
     void startNewGame();
     void makeComputerMove();
+    void toggleRecording();
+    void loadRecording();
 
 public:
     MainWindow(QWidget *parent = nullptr);

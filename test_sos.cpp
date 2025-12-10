@@ -245,3 +245,89 @@ TEST_CASE("Computer vs Computer game completes", "[computer][sprint4]") {
     REQUIRE(game.getState() != GameState::ONGOING);
     REQUIRE(moves < maxMoves);  // Shouldn't hit safety limit
 }
+
+TEST_CASE("Recording can be started and stopped", "[recording][sprint5]") {
+    Game game(5, GameMode::SIMPLE);
+
+    SECTION("Recording starts disabled") {
+        REQUIRE(game.isRecording() == false);
+    }
+
+    SECTION("Can start recording") {
+        game.startRecording();
+        REQUIRE(game.isRecording() == true);
+    }
+
+    SECTION("Can stop recording") {
+        game.startRecording();
+        game.stopRecording();
+        REQUIRE(game.isRecording() == false);
+    }
+}
+
+TEST_CASE("Moves are recorded when recording is active", "[recording][sprint5]") {
+    Game game(5, GameMode::SIMPLE);
+    game.startRecording();
+
+    SECTION("First move is recorded") {
+        game.getCurrentPlayer()->setCurrentLetter('S');
+        game.makeMove(0, 0);
+
+        auto moves = game.getRecordedMoves();
+        REQUIRE(moves.size() == 1);
+        REQUIRE(moves[0].row == 0);
+        REQUIRE(moves[0].col == 0);
+        REQUIRE(moves[0].letter == 'S');
+    }
+
+    SECTION("Multiple moves are recorded") {
+        game.getCurrentPlayer()->setCurrentLetter('S');
+        game.makeMove(0, 0);
+
+        game.getCurrentPlayer()->setCurrentLetter('O');
+        game.makeMove(0, 1);
+
+        game.getCurrentPlayer()->setCurrentLetter('S');
+        game.makeMove(0, 2);
+
+        auto moves = game.getRecordedMoves();
+        REQUIRE(moves.size() == 3);
+    }
+
+    SECTION("Move numbers are sequential") {
+        game.getCurrentPlayer()->setCurrentLetter('S');
+        game.makeMove(0, 0);
+        game.getCurrentPlayer()->setCurrentLetter('O');
+        game.makeMove(0, 1);
+
+        auto moves = game.getRecordedMoves();
+        REQUIRE(moves[0].moveNumber == 1);
+        REQUIRE(moves[1].moveNumber == 2);
+    }
+}
+
+TEST_CASE("Moves are not recorded when recording is off", "[recording][sprint5]") {
+    Game game(5, GameMode::SIMPLE);
+
+    SECTION("Moves before recording not saved") {
+        game.getCurrentPlayer()->setCurrentLetter('S');
+        game.makeMove(0, 0);
+
+        auto moves = game.getRecordedMoves();
+        REQUIRE(moves.size() == 0);
+    }
+
+    SECTION("Moves after stopping not saved") {
+        game.startRecording();
+        game.getCurrentPlayer()->setCurrentLetter('S');
+        game.makeMove(0, 0);
+
+        game.stopRecording();
+
+        game.getCurrentPlayer()->setCurrentLetter('O');
+        game.makeMove(0, 1);
+
+        auto moves = game.getRecordedMoves();
+        REQUIRE(moves.size() == 1);  // Only first move recorded
+    }
+}
